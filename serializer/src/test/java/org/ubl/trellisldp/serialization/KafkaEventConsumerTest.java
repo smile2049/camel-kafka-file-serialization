@@ -30,13 +30,22 @@ import static org.ubl.trellisldp.serialization.ProcessorUtils.tokenizePropertyPl
 import java.io.InputStream;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.Hashtable;
+import java.util.Properties;
+
+import javax.naming.Context;
+import javax.naming.InitialContext;
+
 import org.apache.camel.CamelContext;
 import org.apache.camel.Exchange;
 import org.apache.camel.RuntimeCamelException;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.properties.PropertiesComponent;
 import org.apache.camel.impl.DefaultCamelContext;
+import org.apache.camel.impl.JndiRegistry;
 import org.apache.camel.model.dataformat.JsonLibrary;
+import org.apache.camel.util.IOHelper;
+import org.apache.http.conn.ssl.AllowAllHostnameVerifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.trellisldp.camel.ActivityStreamProcessor;
@@ -61,7 +70,10 @@ public final class KafkaEventConsumerTest {
 
         LOGGER.info("About to run Kafka-camel integration...");
 
-        final CamelContext camelContext = new DefaultCamelContext();
+        JndiRegistry registry = new JndiRegistry(createInitialContext());
+        registry.bind("x509HostnameVerifier", new AllowAllHostnameVerifier());
+        final CamelContext camelContext = new DefaultCamelContext(registry);
+
         camelContext.addRoutes(new RouteBuilder() {
             public void configure() {
                 final PropertiesComponent pc = getContext().getComponent("properties", PropertiesComponent.class);
@@ -92,9 +104,7 @@ public final class KafkaEventConsumerTest {
                         .constant("GET")
                         .setHeader(HTTP_URI)
                         .header(ACTIVITY_STREAM_OBJECT_ID)
-                        .setHeader(HTTP_ACCEPT)
-                        .constant("image/tiff")
-                        .to("http4://localhost")
+                        .to("https4://localhost?x509HostnameVerifier=#x509HostnameVerifier")
                         .to("direct:convert");
                 from("direct:convert")
                         .routeId("ImageConvert")
@@ -139,5 +149,16 @@ public final class KafkaEventConsumerTest {
         Thread.sleep(5 * 60 * 1000);
 
         camelContext.stop();
+    }
+
+    public static Context createInitialContext() throws Exception {
+        InputStream in = KafkaEventConsumerTest.class.getClassLoader().getResourceAsStream("jndi.properties");
+        try {
+            Properties properties = new Properties();
+            properties.load(in);
+            return new InitialContext(new Hashtable<>(properties));
+        } finally {
+            IOHelper.close(in);
+        }
     }
 }
