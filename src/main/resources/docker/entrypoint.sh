@@ -1,2 +1,2 @@
 #!/bin/bash
-exec /opt/serialization/bin/serialization
+exec /opt/serializer/bin/serializer

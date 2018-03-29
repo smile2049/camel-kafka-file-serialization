@@ -61,6 +61,7 @@ public final class KafkaEventConsumerTest {
     private static final Logger LOGGER = LoggerFactory.getLogger(KafkaEventConsumerTest.class);
     private static final String IMAGE_OUTPUT = "CamelImageOutput";
     private static final String IMAGE_INPUT = "CamelImageInput";
+    private static final String CONVERT_OPTIONS = " -set colorspace sRGB -depth 8 -";
 
     private KafkaEventConsumerTest() {
     }
@@ -131,7 +132,7 @@ public final class KafkaEventConsumerTest {
                                         .setHeader(IMAGE_OUTPUT, "image/" + fmt);
                                 exchange
                                         .getIn()
-                                        .setHeader(EXEC_COMMAND_ARGS, " - " + "" + " " + fmt + ":-");
+                                        .setHeader(EXEC_COMMAND_ARGS, CONVERT_OPTIONS + " " + fmt + ":-");
                             } else {
                                 throw new RuntimeCamelException("Invalid format: " + fmt);
                             }

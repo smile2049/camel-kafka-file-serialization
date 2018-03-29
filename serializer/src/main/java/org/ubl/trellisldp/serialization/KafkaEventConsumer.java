@@ -19,7 +19,7 @@ import static java.util.stream.Collectors.toList;
 import static org.apache.camel.Exchange.CONTENT_TYPE;
 import static org.apache.camel.Exchange.FILE_NAME;
 import static org.apache.camel.Exchange.HTTP_METHOD;
-import static org.apache.camel.Exchange.HTTP_URI;
+import static org.apache.camel.Exchange.HTTP_PATH;
 import static org.apache.camel.LoggingLevel.INFO;
 import static org.apache.camel.builder.PredicateBuilder.and;
 import static org.apache.camel.builder.PredicateBuilder.in;
@@ -61,6 +61,7 @@ public class KafkaEventConsumer {
     private static final String IMAGE_OUTPUT = "CamelImageOutput";
     private static final String IMAGE_INPUT = "CamelImageInput";
     private static final String CREATE = "Create";
+    private static final String CONVERT_OPTIONS = " -set colorspace sRGB -depth 8 -";
 
     /**
      * @param args String[]
@@ -125,9 +126,17 @@ public class KafkaEventConsumer {
                             .collect(toList())), header(ACTIVITY_STREAM_TYPE).contains(CREATE)))
                     .setHeader(HTTP_METHOD)
                     .constant("GET")
-                    .setHeader(HTTP_URI)
-                    .header(ACTIVITY_STREAM_OBJECT_ID)
-                    .to("https4://localhost?x509HostnameVerifier=#x509HostnameVerifier")
+                    .process(exchange -> {
+                        final String resource = exchange
+                                .getIn()
+                                .getHeader(ACTIVITY_STREAM_OBJECT_ID, String.class);
+                        final URI uri = new URI(resource);
+                        final String path = uri.getPath();
+                        exchange
+                                .getIn()
+                                .setHeader(HTTP_PATH, path);
+                    })
+                    .to("https4://{{trellis.baseUrl}}?x509HostnameVerifier=#x509HostnameVerifier")
                     .to("direct:convert");
             from("direct:convert")
                     .routeId("ImageConvert")
@@ -154,7 +163,7 @@ public class KafkaEventConsumer {
                                     .setHeader(IMAGE_OUTPUT, "image/" + fmt);
                             exchange
                                     .getIn()
-                                    .setHeader(EXEC_COMMAND_ARGS, " - " + "" + " " + fmt + ":-");
+                                    .setHeader(EXEC_COMMAND_ARGS, CONVERT_OPTIONS + " " + fmt + ":-");
                         } else {
                             throw new RuntimeCamelException("Invalid format: " + fmt);
                         }
@@ -164,11 +173,9 @@ public class KafkaEventConsumer {
                     .to("exec:{{convert.path}}")
                     .log(INFO, LOGGER, "Converting Resource: ${headers[CamelHttpUri]}")
                     .process(exchange -> {
-                        final String resource = exchange
+                        final String path = exchange
                                 .getIn()
-                                .getHeader(HTTP_URI, String.class);
-                        final URI uri = new URI(resource);
-                        final String path = uri.getPath();
+                                .getHeader(HTTP_PATH, String.class);
                         final String outpath = path.replace(
                                 "tif", getContext().resolvePropertyPlaceholders("{{default.output.format}}"));
                         exchange
