@@ -26,15 +26,10 @@ ext {
 }
 
 configure(allprojects) { project ->
-    apply plugin: 'application'
-    apply plugin: 'checkstyle'
     apply plugin: 'maven'
-    apply plugin: 'java'
-    apply plugin: 'java-library'
-    apply plugin: 'org.dm.bundle'
-    apply plugin: 'com.github.hierynomus.license'
 
-    group = 'org.trellisldp.camel'
+    group = 'org.ubl.trellisldp.serialization'
+
 
     repositories {
         jcenter()
@@ -43,6 +38,7 @@ configure(allprojects) { project ->
     }
 
     ext {
+        moduleName = 'org.ubl.trellisldp.serialization'
         camelVersion = '2.20.0'
         camelLdpVersion = '0.1.0'
         commonsRdfVersion = '0.5.0'
@@ -69,22 +65,20 @@ configure(allprojects) { project ->
         checkstyleVersion = '8.8'
     }
 
-    processResources {
-        filesNotMatching(["**/*.sh", "**/*.jar", "**/*.tar", "**/*.xml"]) {
-            expand(project.properties)
-        }
-    }
+    def dockerResourceDir = "${rootProject.buildDir}/resources/main/docker"
 }
 
 configure(subprojects) { subproject ->
+    apply plugin: 'java-library'
     apply plugin: 'com.bmuschko.nexus'
     apply plugin: 'maven-publish'
     apply plugin: 'signing'
     apply plugin: 'checkstyle'
     apply plugin: 'jacoco'
+    apply plugin: 'com.github.hierynomus.license'
 
-    sourceCompatibility = 1.9
-    targetCompatibility = 1.9
+    sourceCompatibility = 1.10
+    targetCompatibility = 1.10
 
     checkstyle {
         configFile = rootProject.file('buildtools/src/main/resources/checkstyle/checkstyle.xml')
@@ -100,25 +94,44 @@ configure(subprojects) { subproject ->
             java = 'SLASHSTAR_STYLE'
         }
     }
+
+    javadoc {
+        doFirst {
+            options.addBooleanOption('html5', true)
+        }
+        destinationDir = new File(projectDir, "docs/${version}")
+        options {
+            links "https://docs.oracle.com/javase/8/docs/api/"
+            links 'https://docs.oracle.com/javaee/7/api/'
+        }
+    }
+
+
+    processResources {
+        filesNotMatching(["**/*.sh", "**/*.jar", "**/*.tar", "**/*.xml"]) {
+            expand(project.properties)
+        }
+    }
 }
 
 project("serializer") {
+    apply plugin: 'application'
+
     description = 'A Camel Kafka service'
     mainClassName = 'org.ubl.trellisldp.serialization.KafkaEventConsumer'
 
     dependencies {
+        implementation group: 'ch.qos.logback', name: 'logback-classic', version: logbackVersion
+        implementation group: 'javax.activation', name: 'activation', version: activationVersion
+        implementation group: 'javax.xml.bind', name: 'jaxb-api', version: jaxbVersion
         implementation group: 'org.apache.camel', name: 'camel-core', version: camelVersion
         implementation group: 'org.trellisldp', name: 'camel-ldp', version: camelLdpVersion
         implementation group: 'org.apache.camel', name: 'camel-kafka', version: camelVersion
         implementation group: 'org.apache.camel', name: 'camel-jackson', version: camelVersion
-        implementation group: 'org.apache.jena', name: 'jena-osgi', version: jenaVersion
+        implementation group: 'org.apache.camel', name: 'camel-http4', version: camelVersion
+        implementation group: 'org.apache.camel', name: 'camel-exec', version: camelVersion
         implementation group: 'org.apache.commons', name: 'commons-rdf-api', version: commonsRdfVersion
         implementation group: 'org.trellisldp', name: 'trellis-api', version: trellisApiVersion
-        implementation group: 'org.apache.commons', name: 'commons-rdf-jena', version: commonsRdfVersion
-        implementation group: 'ch.qos.logback', name: 'logback-classic', version: logbackVersion
-        compile group: 'org.apache.jena', name: 'jena-fuseki-embedded', version: '3.5.0'
-        testImplementation group: 'org.apache.jena', name: 'jena-osgi', version: jenaVersion
-        testCompile group: 'org.apache.jena', name: 'jena-fuseki-embedded', version: '3.5.0'
         testImplementation group: 'org.trellisldp', name: 'trellis-io-jena', version: trellisIoJenaVersion
         testImplementation group: 'org.apache.camel', name: 'camel-kafka', version: camelVersion
         testImplementation group: 'org.apache.camel', name: 'camel-jackson', version: camelVersion

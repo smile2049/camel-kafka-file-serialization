@@ -17,19 +17,20 @@ package org.ubl.trellisldp.serialization;
 import static java.util.Arrays.stream;
 import static java.util.stream.Collectors.toList;
 import static org.apache.camel.Exchange.CONTENT_TYPE;
+import static org.apache.camel.Exchange.FILE_NAME;
 import static org.apache.camel.Exchange.HTTP_METHOD;
-import static org.apache.camel.Exchange.HTTP_PATH;
 import static org.apache.camel.Exchange.HTTP_URI;
 import static org.apache.camel.LoggingLevel.INFO;
+import static org.apache.camel.builder.PredicateBuilder.and;
 import static org.apache.camel.builder.PredicateBuilder.in;
 import static org.apache.camel.component.exec.ExecBinding.EXEC_COMMAND_ARGS;
 import static org.trellisldp.camel.ActivityStreamProcessor.ACTIVITY_STREAM_OBJECT_ID;
 import static org.trellisldp.camel.ActivityStreamProcessor.ACTIVITY_STREAM_OBJECT_TYPE;
+import static org.trellisldp.camel.ActivityStreamProcessor.ACTIVITY_STREAM_TYPE;
 import static org.ubl.trellisldp.serialization.ProcessorUtils.tokenizePropertyPlaceholder;
 
 import java.io.InputStream;
-import java.util.Collection;
-import java.util.HashSet;
+import java.net.URI;
 import java.util.Hashtable;
 import java.util.Properties;
 
@@ -37,7 +38,6 @@ import javax.naming.Context;
 import javax.naming.InitialContext;
 
 import org.apache.camel.CamelContext;
-import org.apache.camel.Exchange;
 import org.apache.camel.RuntimeCamelException;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.properties.PropertiesComponent;
@@ -51,17 +51,16 @@ import org.slf4j.LoggerFactory;
 import org.trellisldp.camel.ActivityStreamProcessor;
 
 /**
- * org.ubl.trellisldp.serialization.KafkaEventConsumerTest.
+ * KafkaEventConsumerTest.
  *
  * @author christopher-johnson
  */
 public final class KafkaEventConsumerTest {
 
+    private static final String CREATE = "Create";
     private static final Logger LOGGER = LoggerFactory.getLogger(KafkaEventConsumerTest.class);
     private static final String IMAGE_OUTPUT = "CamelImageOutput";
     private static final String IMAGE_INPUT = "CamelImageInput";
-
-    private static final String HTTP_ACCEPT = "Accept";
 
     private KafkaEventConsumerTest() {
     }
@@ -70,7 +69,7 @@ public final class KafkaEventConsumerTest {
 
         LOGGER.info("About to run Kafka-camel integration...");
 
-        JndiRegistry registry = new JndiRegistry(createInitialContext());
+        final JndiRegistry registry = new JndiRegistry(createInitialContext());
         registry.bind("x509HostnameVerifier", new AllowAllHostnameVerifier());
         final CamelContext camelContext = new DefaultCamelContext(registry);
 
@@ -90,16 +89,16 @@ public final class KafkaEventConsumerTest {
                         .process(new ActivityStreamProcessor())
                         .marshal()
                         .json(JsonLibrary.Jackson, true)
-                        .log(INFO, LOGGER, "Serializing ActivityStreamMessage to JSONLD")
+                        .log(INFO, LOGGER, "Marshalling ActivityStreamMessage to JSON-LD")
                         //.to("file://{{serialization.log}}");
                         .to("direct:get");
                 from("direct:get")
-                        .routeId("DocumentGet")
+                        .routeId("BinaryGet")
                         .choice()
-                        .when(in(tokenizePropertyPlaceholder(getContext(), "{{indexable.types}}", ",")
+                        .when(and(in(tokenizePropertyPlaceholder(getContext(), "{{indexable.types}}", ",")
                                 .stream()
                                 .map(type -> header(ACTIVITY_STREAM_OBJECT_TYPE).contains(type))
-                                .collect(toList())))
+                                .collect(toList())), header(ACTIVITY_STREAM_TYPE).contains(CREATE)))
                         .setHeader(HTTP_METHOD)
                         .constant("GET")
                         .setHeader(HTTP_URI)
@@ -108,38 +107,68 @@ public final class KafkaEventConsumerTest {
                         .to("direct:convert");
                 from("direct:convert")
                         .routeId("ImageConvert")
-                        .setHeader(IMAGE_INPUT).header(CONTENT_TYPE)
+                        .setHeader(IMAGE_INPUT)
+                        .header(CONTENT_TYPE)
                         .process(exchange -> {
-                            final String accept = exchange.getIn().getHeader(IMAGE_OUTPUT, "", String
-                                    .class);
-                            final String fmt = accept.matches("^image/\\w+$") ? accept.replace("image/",
-                                    "") :
-                                    "jpeg";
+                            final String accept = exchange
+                                    .getIn()
+                                    .getHeader(IMAGE_OUTPUT, "", String.class);
+                            final String fmt = accept.matches("^image/\\w+$") ? accept.replace(
+                                    "image/", "") : getContext().resolvePropertyPlaceholders(
+                                    "{{default.output.format}}");
                             final boolean valid;
                             try {
-                                valid = stream(getContext().resolvePropertyPlaceholders("{{valid"
-                                        + ".formats}}").split(","))
-                                        .anyMatch(fmt::equals);
+                                valid = stream(getContext()
+                                        .resolvePropertyPlaceholders("{{valid.formats}}")
+                                        .split(",")).anyMatch(fmt::equals);
                             } catch (final Exception ex) {
-                                throw new RuntimeCamelException("Couldn't resolve property placeholder",
-                                        ex);
+                                throw new RuntimeCamelException("Couldn't resolve property placeholder", ex);
                             }
 
                             if (valid) {
-                                exchange.getIn().setHeader(IMAGE_OUTPUT, "image/" + fmt);
-                                exchange.getIn().setHeader(EXEC_COMMAND_ARGS,
-                                        " - " + "" + " " + fmt + ":-");
+                                exchange
+                                        .getIn()
+                                        .setHeader(IMAGE_OUTPUT, "image/" + fmt);
+                                exchange
+                                        .getIn()
+                                        .setHeader(EXEC_COMMAND_ARGS, " - " + "" + " " + fmt + ":-");
                             } else {
                                 throw new RuntimeCamelException("Invalid format: " + fmt);
                             }
                         })
-                        .removeHeaders("CamelHttp*")
-                        .log(INFO, LOGGER, "Converting from ${headers[CamelImageInput]} to "
-                                + "${headers[CamelImageOutput]}")
+                        .log(INFO, LOGGER,
+                                "Converting from ${headers[CamelImageInput]} to " + "${headers[CamelImageOutput]}")
                         .to("exec:{{convert.path}}")
+                        .log(INFO, LOGGER, "Converting Resource: ${headers[CamelHttpUri]}")
                         .process(exchange -> {
-                            exchange.getOut().setBody(exchange.getIn().getBody(InputStream.class));
+                            final String resource = exchange
+                                    .getIn()
+                                    .getHeader(HTTP_URI, String.class);
+                            final URI uri = new URI(resource);
+                            final String path = uri.getPath();
+                            final String outpath = path.replace(
+                                    "tif", getContext().resolvePropertyPlaceholders("{{default.output.format}}"));
+                            exchange
+                                    .getIn()
+                                    .setHeader(FILE_NAME, outpath);
                         })
+                        .removeHeaders("CamelHttp*")
+                        .to("direct:serialize");
+                from("direct:serialize")
+                        .process(exchange -> {
+                            exchange
+                                    .getOut()
+                                    .setBody(exchange
+                                            .getIn()
+                                            .getBody(InputStream.class));
+                            final String filename = exchange
+                                    .getIn()
+                                    .getHeader(FILE_NAME, String.class);
+                            exchange
+                                    .getOut()
+                                    .setHeader(FILE_NAME, filename);
+                        })
+                        .log(INFO, LOGGER, "Filename: ${headers[CamelFileName]}")
                         .to("file://{{serialization.binaries}}");
             }
         });
@@ -152,9 +181,11 @@ public final class KafkaEventConsumerTest {
     }
 
     public static Context createInitialContext() throws Exception {
-        InputStream in = KafkaEventConsumerTest.class.getClassLoader().getResourceAsStream("jndi.properties");
+        final InputStream in = KafkaEventConsumerTest.class
+                .getClassLoader()
+                .getResourceAsStream("jndi.properties");
         try {
-            Properties properties = new Properties();
+            final Properties properties = new Properties();
             properties.load(in);
             return new InitialContext(new Hashtable<>(properties));
         } finally {
