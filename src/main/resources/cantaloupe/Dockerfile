@@ -27,11 +27,13 @@ RUN curl -OL https://github.com/medusa-project/cantaloupe/releases/download/v$CA
  && rm /tmp/Cantaloupe-$CANTALOUPE_VERSION.zip
 
 COPY cantaloupe.properties /etc/cantaloupe.properties
+COPY delegates.rb /etc/delegates.rb
 RUN mkdir -p /var/log/cantaloupe \
  && mkdir -p /var/cache/cantaloupe \
  && chown -R cantaloupe /var/log/cantaloupe \
  && chown -R cantaloupe /var/cache/cantaloupe \
- && chown cantaloupe /etc/cantaloupe.properties
+ && chown cantaloupe /etc/cantaloupe.properties \
+ && chown cantaloupe /etc/delegates.rb
 
 USER cantaloupe
 CMD ["sh", "-c", "java -Dcantaloupe.config=/etc/cantaloupe.properties -Xmx2g -jar /usr/local/cantaloupe/Cantaloupe-$CANTALOUPE_VERSION.war"]
