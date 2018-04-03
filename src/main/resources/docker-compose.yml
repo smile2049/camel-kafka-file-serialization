@@ -14,7 +14,7 @@ services:
       - 110_default
 
   camel-file-serialization:
-    image: trellisldp/camel-file-serialization:0.1.1
+    image: trellisldp/camel-file-serialization:0.1.2
     container_name: serialization
     restart: always
     volumes:

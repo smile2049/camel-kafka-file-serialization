@@ -3,8 +3,8 @@ FROM ubuntu:16.04
 MAINTAINER Christopher Johnson <christopher_hanna.johnson@uni-leipzig.de>
 LABEL description = "Provides a Camel Kafka File Serializer"
 
-ENV SERIALIZER_VERSION 0.1.0-SNAPSHOT
-ENV DATASET_RUNTIME /opt
+ENV SERIALIZER_VERSION 0.1.2-SNAPSHOT
+ENV SERIALIZER_RUNTIME /opt
 
 ENV JVM_BASE /usr/lib/jvm
 ENV JDK_JAVA_OPTIONS="-Xms250m -Xmx1024m"
@@ -39,11 +39,11 @@ RUN git clone https://github.com/ImageMagick/ImageMagick.git ./
 RUN ./configure --prefix=/usr --with-modules --with-perl=/usr/bin/perl --with-jp2 --enable-shared --disable-static && \
 make && make install
 
-WORKDIR ${DATASET_RUNTIME}
+WORKDIR ${SERIALIZER_RUNTIME}
 COPY *.tar .
 RUN tar -xvf *.tar && \
 mv serializer-${SERIALIZER_VERSION} serializer && \
-chmod +x ${DATASET_RUNTIME}/serializer/bin/serializer
+chmod +x ${SERIALIZER_RUNTIME}/serializer/bin/serializer
 COPY entrypoint.sh .
 COPY trellis.crt .
 RUN /usr/lib/jvm/jdk-10/bin/keytool -cacerts -storepass changeit -noprompt -import -alias trellis -file trellis.crt

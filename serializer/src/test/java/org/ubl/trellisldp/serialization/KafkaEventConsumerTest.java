@@ -19,6 +19,7 @@ import static java.util.stream.Collectors.toList;
 import static org.apache.camel.Exchange.CONTENT_TYPE;
 import static org.apache.camel.Exchange.FILE_NAME;
 import static org.apache.camel.Exchange.HTTP_METHOD;
+import static org.apache.camel.Exchange.HTTP_RESPONSE_CODE;
 import static org.apache.camel.Exchange.HTTP_URI;
 import static org.apache.camel.LoggingLevel.INFO;
 import static org.apache.camel.builder.PredicateBuilder.and;
@@ -58,6 +59,7 @@ import org.trellisldp.camel.ActivityStreamProcessor;
 public final class KafkaEventConsumerTest {
 
     private static final String CREATE = "Create";
+    private static final String UPDATE = "Update";
     private static final Logger LOGGER = LoggerFactory.getLogger(KafkaEventConsumerTest.class);
     private static final String IMAGE_OUTPUT = "CamelImageOutput";
     private static final String IMAGE_INPUT = "CamelImageInput";
@@ -100,12 +102,41 @@ public final class KafkaEventConsumerTest {
                                 .stream()
                                 .map(type -> header(ACTIVITY_STREAM_OBJECT_TYPE).contains(type))
                                 .collect(toList())), header(ACTIVITY_STREAM_TYPE).contains(CREATE)))
-                        .setHeader(HTTP_METHOD)
-                        .constant("GET")
-                        .setHeader(HTTP_URI)
-                        .header(ACTIVITY_STREAM_OBJECT_ID)
-                        .to("https4://localhost?x509HostnameVerifier=#x509HostnameVerifier")
-                        .to("direct:convert");
+                            .setHeader(HTTP_METHOD)
+                            .constant("GET")
+                            .setHeader(HTTP_URI)
+                            .header(ACTIVITY_STREAM_OBJECT_ID)
+                            .to("https4://localhost?x509HostnameVerifier=#x509HostnameVerifier")
+                        .when(and(in(tokenizePropertyPlaceholder(getContext(), "{{indexable.types}}", ",")
+                                .stream()
+                                .map(type -> header(ACTIVITY_STREAM_OBJECT_TYPE).contains(type))
+                                .collect(toList())), header(ACTIVITY_STREAM_TYPE).contains(UPDATE)))
+                            .setHeader(HTTP_METHOD)
+                            .constant("GET")
+                            .setHeader(HTTP_URI)
+                            .header(ACTIVITY_STREAM_OBJECT_ID)
+                            .to("https4://localhost?x509HostnameVerifier=#x509HostnameVerifier")
+                        .choice()
+                            .when(header(CONTENT_TYPE).startsWith("image/"))
+                                .log(INFO, LOGGER, "Image Processing ${headers[ActivityStreamObjectId]}")
+                                .to("direct:convert")
+                            .when(header("Link").contains("<http://www.w3.org/ns/ldp#NonRDFSource>;rel=\"type\""))
+                                .setBody(constant("Error: this resource is not an image"))
+                                .to("direct:invalidFormat")
+                            .when(header(HTTP_RESPONSE_CODE).isEqualTo(200))
+                                .setBody(constant("Error: this resource is not an ldp:NonRDFSource"))
+                                .to("direct:invalidFormat")
+                            .otherwise()
+                            .   to("direct:error");
+                from("direct:invalidFormat")
+                        .routeId("ImageInvalidFormat")
+                        .removeHeaders("*")
+                        .setHeader(CONTENT_TYPE).constant("text/plain")
+                        .setHeader(HTTP_RESPONSE_CODE).constant(400);
+                from("direct:error")
+                        .routeId("ImageError")
+                        .setBody(constant("Error: this resource is not accessible"))
+                        .setHeader(CONTENT_TYPE).constant("text/plain");
                 from("direct:convert")
                         .routeId("ImageConvert")
                         .setHeader(IMAGE_INPUT)
