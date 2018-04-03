@@ -88,7 +88,7 @@ module Cantaloupe
     #
     def self.get_pathname(identifier, context)
       uri = 'https://fuseki:8443/fuseki/trellis/query?query=' +
-          CGI.escape('SELECT * WHERE {?s <http://rdfs.org/sioc/services#has_service> <http://localhost:8182/iiif/2/' + identifier + '>}')
+          CGI.escape('SELECT * WHERE {?s <http://rdfs.org/sioc/services#has_service> <http://workspaces.ub.uni-leipzig.de:8182/iiif/2/' + identifier + '>}')
       uri = URI.parse(uri)
       http = Net::HTTP.new(uri.host, uri.port)
       http.use_ssl = true

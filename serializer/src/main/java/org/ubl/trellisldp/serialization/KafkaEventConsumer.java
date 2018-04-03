@@ -20,9 +20,12 @@ import static org.apache.camel.Exchange.CONTENT_TYPE;
 import static org.apache.camel.Exchange.FILE_NAME;
 import static org.apache.camel.Exchange.HTTP_METHOD;
 import static org.apache.camel.Exchange.HTTP_PATH;
+import static org.apache.camel.Exchange.HTTP_RESPONSE_CODE;
+import static org.apache.camel.Exchange.HTTP_URI;
 import static org.apache.camel.LoggingLevel.INFO;
 import static org.apache.camel.builder.PredicateBuilder.and;
 import static org.apache.camel.builder.PredicateBuilder.in;
+import static org.apache.camel.builder.PredicateBuilder.or;
 import static org.apache.camel.component.exec.ExecBinding.EXEC_COMMAND_ARGS;
 import static org.slf4j.LoggerFactory.getLogger;
 import static org.trellisldp.camel.ActivityStreamProcessor.ACTIVITY_STREAM_OBJECT_ID;
@@ -61,6 +64,7 @@ public class KafkaEventConsumer {
     private static final String IMAGE_OUTPUT = "CamelImageOutput";
     private static final String IMAGE_INPUT = "CamelImageInput";
     private static final String CREATE = "Create";
+    private static final String UPDATE = "Update";
     private static final String CONVERT_OPTIONS = " -set colorspace sRGB -depth 8 -";
 
     /**
@@ -117,15 +121,20 @@ public class KafkaEventConsumer {
                     .log(INFO, LOGGER, "Marshalling ActivityStreamMessage to JSON-LD")
                     //.to("file://{{serialization.log}}");
                     .to("direct:get");
+
             from("direct:get")
                     .routeId("BinaryGet")
                     .choice()
                     .when(and(in(tokenizePropertyPlaceholder(getContext(), "{{indexable.types}}", ",")
-                            .stream()
-                            .map(type -> header(ACTIVITY_STREAM_OBJECT_TYPE).contains(type))
-                            .collect(toList())), header(ACTIVITY_STREAM_TYPE).contains(CREATE)))
+                    .stream()
+                    .map(type -> header(ACTIVITY_STREAM_OBJECT_TYPE).contains(type))
+                    .collect(toList())), or(header(ACTIVITY_STREAM_TYPE).contains(CREATE),
+                        header(ACTIVITY_STREAM_TYPE).contains(UPDATE))))
                     .setHeader(HTTP_METHOD)
-                    .constant("GET")
+                        .constant("GET")
+                        .setHeader(HTTP_URI)
+                        .header(ACTIVITY_STREAM_OBJECT_ID)
+                        .to("https4://localhost?x509HostnameVerifier=#x509HostnameVerifier")
                     .process(exchange -> {
                         final String resource = exchange
                                 .getIn()
@@ -137,7 +146,30 @@ public class KafkaEventConsumer {
                                 .setHeader(HTTP_PATH, path);
                     })
                     .to("https4://{{trellis.baseUrl}}?x509HostnameVerifier=#x509HostnameVerifier")
-                    .to("direct:convert");
+                        .choice()
+                            .when(header(CONTENT_TYPE).startsWith("image/"))
+                                .log(INFO, LOGGER, "Image Processing ${headers[ActivityStreamObjectId]}")
+                                .to("direct:convert")
+                            .when(header("Link").contains("<http://www.w3.org/ns/ldp#NonRDFSource>;rel=\"type\""))
+                                .setBody(constant("Error: this resource is not an image"))
+                                .to("direct:invalidFormat")
+                            .when(header(HTTP_RESPONSE_CODE).isEqualTo(200))
+                                .setBody(constant("Error: this resource is not an ldp:NonRDFSource"))
+                                .to("direct:invalidFormat")
+                            .otherwise()
+                            .to("direct:error");
+
+            from("direct:invalidFormat")
+                    .routeId("ImageInvalidFormat")
+                    .removeHeaders("*")
+                    .setHeader(CONTENT_TYPE).constant("text/plain")
+                    .setHeader(HTTP_RESPONSE_CODE).constant(400);
+
+            from("direct:error")
+                    .routeId("ImageError")
+                    .setBody(constant("Error: this resource is not accessible"))
+                    .setHeader(CONTENT_TYPE).constant("text/plain");
+
             from("direct:convert")
                     .routeId("ImageConvert")
                     .setHeader(IMAGE_INPUT)
@@ -175,7 +207,7 @@ public class KafkaEventConsumer {
                     .process(exchange -> {
                         final String path = exchange
                                 .getIn()
-                                .getHeader(HTTP_PATH, String.class);
+                                    .getHeader(HTTP_PATH, String.class);
                         final String outpath = path.replace(
                                 "tif", getContext().resolvePropertyPlaceholders("{{default.output.format}}"));
                         exchange
@@ -184,6 +216,7 @@ public class KafkaEventConsumer {
                     })
                     .removeHeaders("CamelHttp*")
                     .to("direct:serialize");
+
             from("direct:serialize")
                     .process(exchange -> {
                         exchange
