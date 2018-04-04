@@ -24,6 +24,7 @@ import static org.apache.camel.Exchange.HTTP_URI;
 import static org.apache.camel.LoggingLevel.INFO;
 import static org.apache.camel.builder.PredicateBuilder.and;
 import static org.apache.camel.builder.PredicateBuilder.in;
+import static org.apache.camel.builder.PredicateBuilder.or;
 import static org.apache.camel.component.exec.ExecBinding.EXEC_COMMAND_ARGS;
 import static org.trellisldp.camel.ActivityStreamProcessor.ACTIVITY_STREAM_OBJECT_ID;
 import static org.trellisldp.camel.ActivityStreamProcessor.ACTIVITY_STREAM_OBJECT_TYPE;
@@ -101,33 +102,25 @@ public final class KafkaEventConsumerTest {
                         .when(and(in(tokenizePropertyPlaceholder(getContext(), "{{indexable.types}}", ",")
                                 .stream()
                                 .map(type -> header(ACTIVITY_STREAM_OBJECT_TYPE).contains(type))
-                                .collect(toList())), header(ACTIVITY_STREAM_TYPE).contains(CREATE)))
-                            .setHeader(HTTP_METHOD)
-                            .constant("GET")
-                            .setHeader(HTTP_URI)
-                            .header(ACTIVITY_STREAM_OBJECT_ID)
-                            .to("https4://localhost?x509HostnameVerifier=#x509HostnameVerifier")
-                        .when(and(in(tokenizePropertyPlaceholder(getContext(), "{{indexable.types}}", ",")
-                                .stream()
-                                .map(type -> header(ACTIVITY_STREAM_OBJECT_TYPE).contains(type))
-                                .collect(toList())), header(ACTIVITY_STREAM_TYPE).contains(UPDATE)))
-                            .setHeader(HTTP_METHOD)
-                            .constant("GET")
-                            .setHeader(HTTP_URI)
-                            .header(ACTIVITY_STREAM_OBJECT_ID)
-                            .to("https4://localhost?x509HostnameVerifier=#x509HostnameVerifier")
+                                .collect(toList())), or(header(ACTIVITY_STREAM_TYPE).contains(CREATE),
+                                header(ACTIVITY_STREAM_TYPE).contains(UPDATE))))
+                        .setHeader(HTTP_METHOD)
+                        .constant("GET")
+                        .setHeader(HTTP_URI)
+                        .header(ACTIVITY_STREAM_OBJECT_ID)
+                        .to("https4://localhost?x509HostnameVerifier=#x509HostnameVerifier")
                         .choice()
-                            .when(header(CONTENT_TYPE).startsWith("image/"))
-                                .log(INFO, LOGGER, "Image Processing ${headers[ActivityStreamObjectId]}")
-                                .to("direct:convert")
-                            .when(header("Link").contains("<http://www.w3.org/ns/ldp#NonRDFSource>;rel=\"type\""))
-                                .setBody(constant("Error: this resource is not an image"))
-                                .to("direct:invalidFormat")
-                            .when(header(HTTP_RESPONSE_CODE).isEqualTo(200))
-                                .setBody(constant("Error: this resource is not an ldp:NonRDFSource"))
-                                .to("direct:invalidFormat")
-                            .otherwise()
-                            .   to("direct:error");
+                        .when(header(CONTENT_TYPE).startsWith("image/"))
+                        .log(INFO, LOGGER, "Image Processing ${headers[ActivityStreamObjectId]}")
+                        .to("direct:convert")
+                        .when(header("Link").contains("<http://www.w3.org/ns/ldp#NonRDFSource>;rel=\"type\""))
+                        .setBody(constant("Error: this resource is not an image"))
+                        .to("direct:invalidFormat")
+                        .when(header(HTTP_RESPONSE_CODE).isEqualTo(200))
+                        .setBody(constant("Error: this resource is not an ldp:NonRDFSource"))
+                        .to("direct:invalidFormat")
+                        .otherwise()
+                        .   to("direct:error");
                 from("direct:invalidFormat")
                         .routeId("ImageInvalidFormat")
                         .removeHeaders("*")
