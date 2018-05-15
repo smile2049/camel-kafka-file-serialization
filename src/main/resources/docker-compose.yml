@@ -14,11 +14,14 @@ services:
       - 110_default
 
   camel-file-serialization:
-    image: trellisldp/camel-kafka-file-serialization:0.1.3
+    image: trellisldp/camel-kafka-file-serialization:0.2.0
     container_name: serialization
     restart: always
+    environment:
+        SERIALIZATION_HOME: /etc/dynamo
     volumes:
       - cantaloupe-volume:/mnt/serialized-binaries
+      - ./cfg/de.ubleipzig.camel.serialization.cfg:/etc/dynamo/de.ubleipzig.camel.serialization.cfg
     networks:
       - 110_default
 

@@ -3,7 +3,7 @@ FROM ubuntu:16.04
 MAINTAINER Christopher Johnson <christopher_hanna.johnson@uni-leipzig.de>
 LABEL description = "Provides a Camel Kafka File Serializer"
 
-ENV SERIALIZER_VERSION 0.1.3-SNAPSHOT
+ENV SERIALIZER_VERSION 0.2.0-SNAPSHOT
 ENV SERIALIZER_RUNTIME /opt
 
 ENV JVM_BASE /usr/lib/jvm

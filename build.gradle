@@ -28,23 +28,25 @@ ext {
 configure(allprojects) { project ->
     apply plugin: 'maven'
 
-    group = 'org.ubl.trellisldp.serialization'
+    group = 'de.ubleizpig'
 
 
     repositories {
         jcenter()
         mavenCentral()
-        mavenLocal()
+        maven {
+            url "https://oss.sonatype.org/content/repositories/snapshots"
+        }
     }
 
     ext {
-        moduleName = 'org.ubl.trellisldp.serialization'
+        moduleName = 'de.ubleipzig.camel.serialization'
         camelVersion = '2.20.0'
         camelLdpVersion = '0.1.0'
         commonsRdfVersion = '0.5.0'
         jsonldVersion = "0.11.1"
         thriftVersion = "0.9.3"
-        trellisApiVersion = "0.6.0"
+        trellisApiVersion = "0.7.0-SNAPSHOT"
 
         /* Testing */
         junitVersion = '5.0.1'
@@ -80,6 +82,13 @@ configure(subprojects) { subproject ->
     sourceCompatibility = 1.10
     targetCompatibility = 1.10
 
+    gradle.projectsEvaluated {
+        tasks.withType(JavaCompile) {
+            options.compilerArgs.add("-Xlint:unchecked")
+            options.compilerArgs.add("-Xlint:deprecation")
+        }
+    }
+
     checkstyle {
         configFile = rootProject.file('buildtools/src/main/resources/checkstyle/checkstyle.xml')
         configProperties.checkstyleConfigDir = rootProject.file('buildtools/src/main/resources/checkstyle/')
@@ -102,7 +111,6 @@ configure(subprojects) { subproject ->
         destinationDir = new File(projectDir, "docs/${version}")
         options {
             links "https://docs.oracle.com/javase/8/docs/api/"
-            links 'https://docs.oracle.com/javaee/7/api/'
         }
     }
 
@@ -118,33 +126,34 @@ project("serializer") {
     apply plugin: 'application'
 
     description = 'A Camel Kafka service'
-    mainClassName = 'org.ubl.trellisldp.serialization.KafkaEventConsumer'
+    mainClassName = 'de.ubleipzig.camel.serialization.KafkaEventConsumer'
 
     dependencies {
-        implementation group: 'ch.qos.logback', name: 'logback-classic', version: logbackVersion
-        implementation group: 'javax.activation', name: 'activation', version: activationVersion
-        implementation group: 'javax.xml.bind', name: 'jaxb-api', version: jaxbVersion
-        implementation group: 'org.apache.camel', name: 'camel-core', version: camelVersion
-        implementation group: 'org.trellisldp', name: 'camel-ldp', version: camelLdpVersion
-        implementation group: 'org.apache.camel', name: 'camel-kafka', version: camelVersion
-        implementation group: 'org.apache.camel', name: 'camel-jackson', version: camelVersion
-        implementation group: 'org.apache.camel', name: 'camel-http4', version: camelVersion
-        implementation group: 'org.apache.camel', name: 'camel-exec', version: camelVersion
-        implementation group: 'org.apache.commons', name: 'commons-rdf-api', version: commonsRdfVersion
-        implementation group: 'org.trellisldp', name: 'trellis-api', version: trellisApiVersion
-        testImplementation group: 'org.trellisldp', name: 'trellis-io-jena', version: trellisIoJenaVersion
-        testImplementation group: 'org.apache.camel', name: 'camel-kafka', version: camelVersion
-        testImplementation group: 'org.apache.camel', name: 'camel-jackson', version: camelVersion
-        testImplementation group: 'org.apache.camel', name: 'camel-http4', version: camelVersion
-        testImplementation group: 'org.apache.camel', name: 'camel-exec', version: camelVersion
-        testImplementation group: 'org.apiguardian', name: 'apiguardian-api', version: apiguardianVersion
-        testImplementation group: 'org.junit.platform', name: 'junit-platform-runner', version: junitPlatformVersion
-        testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter-engine', version: junitVersion
-        testImplementation group: 'org.apache.camel', name: 'camel-test', version: camelVersion
-        testImplementation group: 'javax.xml.bind', name: 'jaxb-api', version: jaxbVersion
-        testImplementation group: 'ch.qos.logback', name: 'logback-classic', version: logbackVersion
-        testCompile group: 'org.apache.camel', name: 'camel-test-blueprint', version: camelVersion
-        testImplementation group: 'javax.activation', name: 'activation', version: activationVersion
+        implementation("ch.qos.logback:logback-classic:$logbackVersion")
+        implementation("javax.activation:activation:$activationVersion")
+        implementation("javax.xml.bind:jaxb-api:$jaxbVersion")
+        implementation("org.apache.camel:camel-core:$camelVersion")
+        implementation("org.trellisldp:camel-ldp:$camelLdpVersion")
+        implementation("org.apache.camel:camel-kafka:$camelVersion")
+        implementation("org.apache.camel:camel-jackson:$camelVersion")
+        implementation("org.apache.camel:camel-http4:$camelVersion")
+        implementation("org.apache.camel:camel-exec:$camelVersion")
+        implementation("org.apache.commons:commons-rdf-api:$commonsRdfVersion")
+        implementation("org.trellisldp:trellis-api:$trellisApiVersion")
+
+        testImplementation("org.trellisldp:trellis-io-jena:$trellisIoJenaVersion")
+        testImplementation("org.apache.camel:camel-kafka:$camelVersion")
+        testImplementation("org.apache.camel:camel-jackson:$camelVersion")
+        testImplementation("org.apache.camel:camel-http4:$camelVersion")
+        testImplementation("org.apache.camel:camel-exec:$camelVersion")
+        testImplementation("org.apiguardian:apiguardian-api:$apiguardianVersion")
+        testImplementation("org.junit.platform:junit-platform-runner:$junitPlatformVersion")
+        testImplementation("org.junit.jupiter:junit-jupiter-engine:$junitVersion")
+        testImplementation("org.apache.camel:camel-test:$camelVersion")
+        testImplementation("javax.xml.bind:jaxb-api:$jaxbVersion")
+        testImplementation("ch.qos.logback:logback-classic:$logbackVersion")
+        testImplementation("org.apache.camel:camel-test-blueprint:$camelVersion")
+        testImplementation("javax.activation:activation:$activationVersion")
     }
 }
 
