@@ -10,6 +10,8 @@ services:
       - "8183:8183"
     volumes:
       - cantaloupe-volume:/mnt/serialized-binaries
+      - ./cantaloupe/delegates.rb:/etc/delegates.rb
+      - ./cantaloupe/cantaloupe.properties:/etc/cantaloupe.properties
     networks:
       - 110_default
 

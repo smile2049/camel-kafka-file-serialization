@@ -26,8 +26,6 @@ RUN curl -OL https://github.com/medusa-project/cantaloupe/releases/download/v$CA
  && rm -rf /tmp/Cantaloupe-$CANTALOUPE_VERSION \
  && rm /tmp/Cantaloupe-$CANTALOUPE_VERSION.zip
 
-COPY cantaloupe.properties /etc/cantaloupe.properties
-COPY delegates.rb /etc/delegates.rb
 RUN mkdir -p /var/log/cantaloupe \
  && mkdir -p /var/cache/cantaloupe \
  && chown -R cantaloupe /var/log/cantaloupe \
