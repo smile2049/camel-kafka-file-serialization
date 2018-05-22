@@ -109,8 +109,10 @@ public class KafkaEventConsumer {
             LOGGER.info("About to start route: Kafka Server -> Log ");
 
             from("kafka:{{consumer.topic}}?brokers={{kafka.host}}:{{kafka.port}}"
-                    + "&maxPollRecords={{consumer.maxPollRecords}}" + "&consumersCount={{consumer.consumersCount}}"
-                    + "&seekTo={{consumer.seekTo}}" + "&groupId={{consumer.group}}")
+                    + "&consumersCount={{consumer.consumersCount}}"
+                    + "&seekTo={{consumer.seekTo}}"
+                    + "&groupId={{consumer.group}}"
+                    + "&autoCommitIntervalMs={{auto.commit.interval.ms}}")
                     .routeId("FromKafka")
                     .unmarshal()
                     .json(JsonLibrary.Jackson)
