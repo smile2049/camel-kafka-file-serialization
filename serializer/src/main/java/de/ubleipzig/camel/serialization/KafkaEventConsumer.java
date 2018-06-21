@@ -14,6 +14,7 @@
 
 package de.ubleipzig.camel.serialization;
 
+import static de.ubleipzig.camel.serialization.ProcessorUtils.tokenizePropertyPlaceholder;
 import static java.util.Arrays.stream;
 import static java.util.stream.Collectors.toList;
 import static org.apache.camel.Exchange.CONTENT_TYPE;
@@ -30,15 +31,9 @@ import static org.slf4j.LoggerFactory.getLogger;
 import static org.trellisldp.camel.ActivityStreamProcessor.ACTIVITY_STREAM_OBJECT_ID;
 import static org.trellisldp.camel.ActivityStreamProcessor.ACTIVITY_STREAM_OBJECT_TYPE;
 import static org.trellisldp.camel.ActivityStreamProcessor.ACTIVITY_STREAM_TYPE;
-import static de.ubleipzig.camel.serialization.ProcessorUtils.tokenizePropertyPlaceholder;
 
 import java.io.InputStream;
 import java.net.URI;
-import java.util.Hashtable;
-import java.util.Properties;
-
-import javax.naming.Context;
-import javax.naming.InitialContext;
 
 import org.apache.camel.RuntimeCamelException;
 import org.apache.camel.builder.RouteBuilder;
@@ -47,8 +42,7 @@ import org.apache.camel.main.Main;
 import org.apache.camel.main.MainListenerSupport;
 import org.apache.camel.main.MainSupport;
 import org.apache.camel.model.dataformat.JsonLibrary;
-import org.apache.camel.util.IOHelper;
-import org.apache.http.conn.ssl.AllowAllHostnameVerifier;
+import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.slf4j.Logger;
 import org.trellisldp.camel.ActivityStreamProcessor;
 
@@ -79,8 +73,8 @@ public class KafkaEventConsumer {
         final Main main = new Main();
         main.addRouteBuilder(new KafkaEventRoute());
         main.addMainListener(new Events());
-        final JndiRegistry registry = new JndiRegistry(createInitialContext());
-        main.bind("x509HostnameVerifier", new AllowAllHostnameVerifier());
+        final JndiRegistry registry = new JndiRegistry(ContextUtils.createInitialContext());
+        main.bind("x509HostnameVerifier", new NoopHostnameVerifier());
         main.setPropertyPlaceholderLocations("file:${env:SERIALIZATION_HOME}/de.ubleipzig.camel.serialization.cfg");
         main.run();
     }
@@ -109,6 +103,7 @@ public class KafkaEventConsumer {
             LOGGER.info("About to start route: Kafka Server -> Log ");
 
             from("kafka:{{consumer.topic}}?brokers={{kafka.host}}:{{kafka.port}}"
+                    + "&maxPollRecords={{consumer.maxPollRecords}}"
                     + "&consumersCount={{consumer.consumersCount}}"
                     + "&seekTo={{consumer.seekTo}}"
                     + "&groupId={{consumer.group}}"
@@ -235,19 +230,6 @@ public class KafkaEventConsumer {
                     })
                     .log(INFO, LOGGER, "Filename: ${headers[CamelFileName]}")
                     .to("file://{{serialization.binaries}}");
-        }
-    }
-
-    private static Context createInitialContext() throws Exception {
-        final InputStream in = KafkaEventConsumer.class
-                .getClassLoader()
-                .getResourceAsStream("jndi.properties");
-        try {
-            final Properties properties = new Properties();
-            properties.load(in);
-            return new InitialContext(new Hashtable<>(properties));
-        } finally {
-            IOHelper.close(in);
         }
     }
 }

@@ -16,7 +16,7 @@ services:
       - 110_default
 
   camel-file-serialization:
-    image: trellisldp/camel-kafka-file-serialization:0.2.0
+    image: trellisldp/camel-kafka-file-serialization:0.2.1
     container_name: serialization
     restart: always
     environment:
